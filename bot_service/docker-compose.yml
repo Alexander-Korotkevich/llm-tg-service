@@ -1,0 +1,138 @@
+# bot_service/docker-compose.yml
+# Исправленная версия
+
+version: '3.8'
+
+services:
+  # FastAPI сервер
+  bot-fastapi:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bot-fastapi
+    restart: unless-stopped
+    ports:
+      - "8001:8000"
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    environment:
+      - ENV=production
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_ALG=HS256
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - OPENROUTER_BASE_URL=${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
+      - OPENROUTER_MODEL=${OPENROUTER_MODEL:-stepfun/step-3.5-flash:free}
+      - OPENROUTER_SITE_URL=${OPENROUTER_SITE_URL:-https://example.com}
+      - OPENROUTER_APP_NAME=bot-service
+      - REDIS_URL=redis://redis:6379/0
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672//
+    depends_on:
+      - redis
+      - rabbitmq
+    networks:
+      - bot-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # aiogram бот
+  bot-aiogram:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bot-aiogram
+    restart: unless-stopped
+    command: python -m app.bot.run
+    environment:
+      - ENV=production
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_ALG=HS256
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - OPENROUTER_BASE_URL=${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
+      - OPENROUTER_MODEL=${OPENROUTER_MODEL:-stepfun/step-3.5-flash:free}
+      - OPENROUTER_SITE_URL=${OPENROUTER_SITE_URL:-https://example.com}
+      - OPENROUTER_APP_NAME=bot-service
+      - REDIS_URL=redis://redis:6379/0
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672//
+    depends_on:
+      - redis
+      - rabbitmq
+    networks:
+      - bot-network
+
+  # Celery worker
+  bot-celery-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bot-celery-worker
+    restart: unless-stopped
+    command: celery -A app.infra.celery_app worker --loglevel=info --concurrency=4
+    environment:
+      - ENV=production
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_ALG=HS256
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - OPENROUTER_BASE_URL=${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
+      - OPENROUTER_MODEL=${OPENROUTER_MODEL:-stepfun/step-3.5-flash:free}
+      - OPENROUTER_SITE_URL=${OPENROUTER_SITE_URL:-https://example.com}
+      - OPENROUTER_APP_NAME=bot-service
+      - REDIS_URL=redis://redis:6379/0
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672//
+    depends_on:
+      - redis
+      - rabbitmq
+    networks:
+      - bot-network
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    container_name: bot-redis
+    restart: unless-stopped
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - bot-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # RabbitMQ
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: bot-rabbitmq
+    restart: unless-stopped
+    ports:
+      - "5673:5672"
+      - "15673:15672"
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    networks:
+      - bot-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+volumes:
+  redis-data:
+  rabbitmq-data:
+
+networks:
+  bot-network:
+    driver: bridge
