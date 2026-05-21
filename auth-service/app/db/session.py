@@ -22,14 +22,18 @@ async def get_db() -> AsyncSession:
     """
     Dependency для получения сессии базы данных.
     Используется в эндпоинтах FastAPI.
-    
-    Yields:
-        AsyncSession: Сессия SQLAlchemy
     """
     async with AsyncSessionLocal() as session:
         try:
             yield session
+            # коммитим транзакцию после успешного выполнения
+            await session.commit()
+        except Exception:
+            # При ошибке откатываем
+            await session.rollback()
+            raise
         finally:
+            # Всегда закрываем сессию
             await session.close()
 
 async def init_db():
