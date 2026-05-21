@@ -144,7 +144,6 @@ async def process_token_input(message: Message, state: FSMContext):
     # Проверяем валидность токена
     try:
         payload = decode_and_validate(jwt_token)
-        user_id_from_token = payload.get("sub")
         
     except JWTValidationError as e:
         await message.answer(
@@ -196,14 +195,18 @@ async def cmd_cancel(message: Message, state: FSMContext):
 # --------------------------------------------------------------------
 # Обработчик текстовых сообщений (основная логика)
 # --------------------------------------------------------------------
-@router.message(F.text & ~F.text.startswith("/"))
+@router.message(F.text)
 async def handle_text_message(message: Message):
     """
-    Обрабатывает обычные текстовые сообщения.
-    Проверяет наличие JWT токена, валидирует его и отправляет задачу в Celery.
+    Обрабатывает обычные текстовые сообщения (не команды).
     """
+    # Проверяем, что это не команда
+    if message.text.startswith('/'):
+        return  # Игнорируем команды
+    
     telegram_id = str(message.from_user.id)
     user_message = message.text.strip()
+
     
     if not user_message:
         await message.answer("Пожалуйста, отправьте текст сообщения.")
@@ -221,7 +224,7 @@ async def handle_text_message(message: Message):
                 "🔒 <b>Доступ запрещён</b>\n\n"
                 "У вас нет активной сессии.\n"
                 "Пожалуйста, авторизуйтесь через Auth Service и отправьте токен командой:\n"
-                f"<code>/token ваш_jwt_токен</code>\n\n"
+                "<code>/token ваш_jwt_токен</code>\n\n"
                 "Или используйте команду /login для пошаговой авторизации.\n\n"
                 "Получить токен можно в Auth Service."
             )

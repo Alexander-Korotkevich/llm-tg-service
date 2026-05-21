@@ -214,7 +214,7 @@ class OpenRouterClient:
                         if "error" in error_data:
                             error_message = error_data["error"].get("message", error_message)
                             error_details = error_data["error"]
-                    except:
+                    except (ValueError, KeyError, TypeError):
                         # Если не удалось распарсить JSON, используем текст ответа
                         error_message = response.text[:200] if response.text else error_message
                     
@@ -307,7 +307,8 @@ class OpenRouterClient:
                         if "error" in error_data:
                             error_message = error_data["error"].get("message", error_message)
                             error_details = error_data["error"]
-                    except:
+                    except (ValueError, KeyError, TypeError):
+                        # Если не удалось распарсить JSON, используем текст ответа
                         error_message = response.text[:200] if response.text else error_message
                     
                     logger.error(f"OpenRouter вернул ошибку: {error_message}")
@@ -321,7 +322,7 @@ class OpenRouterClient:
                 response_data = response.json()
                 result = self._parse_response(response_data)
                 
-                logger.info(f"Успешный асинхронный ответ от OpenRouter")
+                logger.info("Успешный асинхронный ответ от OpenRouter")
                 return result
                 
         except httpx.TimeoutException as e:

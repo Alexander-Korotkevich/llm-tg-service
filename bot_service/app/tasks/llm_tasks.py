@@ -1,6 +1,6 @@
 import httpx
 import logging
-from typing import Optional, Dict, Any
+from typing import Dict, Any
 from celery import Task
 from app.infra.celery_app import celery_app
 from app.core.config import settings
@@ -119,7 +119,7 @@ def llm_request(
         }
         
         if send_directly:
-            send_telegram_message(tg_chat_id, f"❌ Извините, произошла ошибка. Попробуйте позже.")
+            send_telegram_message(tg_chat_id, "❌ Извините, произошла ошибка. Попробуйте позже.")
         else:
             save_result_to_redis(tg_chat_id, f"Ошибка: {error_msg}", is_error=True)
         

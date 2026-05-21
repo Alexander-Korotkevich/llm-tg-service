@@ -1,6 +1,5 @@
-from jose import jwt, JWTError
+from jose import jwt, JWTError, ExpiredSignatureError
 from typing import Dict, Any
-from datetime import datetime
 from app.core.config import settings
 
 
@@ -16,25 +15,7 @@ class JWTValidationError(Exception):
 def decode_and_validate(token: str) -> Dict[str, Any]:
     """
     Декодирует и проверяет JWT токен.
-    
-    Аргументы:
-        token: JWT токен в формате строки
-        
-    Возвращает:
-        Dict[str, Any]: Payload токена (данные пользователя)
-        
-    Исключения:
-        JWTValidationError: Если токен невалидный, истёк или имеет неверную подпись
-        
-    Пример:
-        try:
-            payload = decode_and_validate(user_jwt)
-            user_id = payload.get("sub")
-        except JWTValidationError as e:
-            # Токен неверный
-            print(f"Ошибка: {e}")
     """
-    
     # Проверяем, что токен не пустой
     if not token or not isinstance(token, str):
         raise JWTValidationError("Токен отсутствует или имеет неверный формат")
@@ -46,10 +27,10 @@ def decode_and_validate(token: str) -> Dict[str, Any]:
             settings.JWT_SECRET,
             algorithms=[settings.JWT_ALG],
             options={
-                "verify_signature": True,      # Проверка подписи
-                "verify_exp": True,            # Проверка срока действия
-                "verify_iat": True,            # Проверка времени выдачи (опционально)
-                "verify_aud": False,           # Не проверяем аудиторию (по умолчанию)
+                "verify_signature": True,
+                "verify_exp": True,
+                "verify_iat": False,  # Отключаем проверку iat для упрощения
+                "verify_aud": False,
             }
         )
         
@@ -57,31 +38,20 @@ def decode_and_validate(token: str) -> Dict[str, Any]:
         if "sub" not in payload:
             raise JWTValidationError("В токене отсутствует идентификатор пользователя (sub)")
         
-        # Проверяем, не истёк ли токен явно
-        if "exp" in payload:
-            exp_timestamp = payload["exp"]
-            if isinstance(exp_timestamp, (int, float)):
-                exp_datetime = datetime.fromtimestamp(exp_timestamp)
-                if exp_datetime < datetime.now():
-                    raise JWTValidationError("Срок действия токена истёк")
-        
         return payload
         
+    except ExpiredSignatureError:
+        # Эта ошибка должна обрабатываться первой!
+        raise JWTValidationError("Срок действия токена истёк")
     except JWTError as e:
-        # Обрабатываем специфические ошибки jose
-        error_message = str(e)
-        
-        if "signature" in error_message.lower():
+        error_message = str(e).lower()
+        if "signature" in error_message:
             raise JWTValidationError("Неверная подпись токена")
-        elif "expired" in error_message.lower():
+        elif "expired" in error_message:
             raise JWTValidationError("Срок действия токена истёк")
-        elif "invalid" in error_message.lower():
-            raise JWTValidationError("Неверный формат токена")
         else:
-            raise JWTValidationError(f"Ошибка валидации JWT: {error_message}")
-    
+            raise JWTValidationError(f"Ошибка валидации JWT: {str(e)}")
     except Exception as e:
-        # Ловим любые другие ошибки
         raise JWTValidationError(f"Непредвиденная ошибка при проверке токена: {str(e)}")
 
 
@@ -89,15 +59,6 @@ def decode_and_validate(token: str) -> Dict[str, Any]:
 def get_user_id_from_token(token: str) -> str:
     """
     Извлекает user_id (sub) из валидного JWT токена.
-    
-    Аргументы:
-        token: JWT токен
-        
-    Возвращает:
-        str: Идентификатор пользователя
-        
-    Исключения:
-        JWTValidationError: Если токен невалидный
     """
     payload = decode_and_validate(token)
     user_id = payload.get("sub")
@@ -112,11 +73,5 @@ def get_user_id_from_token(token: str) -> str:
 def get_user_payload(token: str) -> Dict[str, Any]:
     """
     Возвращает весь payload из валидного JWT токена.
-    
-    Аргументы:
-        token: JWT токен
-        
-    Возвращает:
-        Dict[str, Any]: Полные данные из токена
     """
     return decode_and_validate(token)
